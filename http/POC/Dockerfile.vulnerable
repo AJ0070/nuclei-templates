@@ -1,0 +1,55 @@
+# Dockerfile for CVE-2025-3046 Vulnerable Environment
+# Builds an environment with vulnerable llama-index version for testing
+
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Install vulnerable version of llama-index and the specific reader
+# Using 0.12.24 as example - adjust as needed
+RUN pip install --no-cache-dir \
+    "llama-index==0.12.24" \
+    "llama-index-readers-obsidian==0.2.0"
+
+# Create a test file outside intended vault for demonstration
+RUN mkdir -p /sensitive && \
+    echo "CONFIDENTIAL: Database password = super_secret_123" > /sensitive/config.txt && \
+    echo "CONFIDENTIAL: API keys and tokens" > /sensitive/secrets.txt && \
+    chmod 644 /sensitive/*.txt
+
+# Copy PoC script
+COPY poc_CVE-2025-3046.py /workspace/
+
+# Create a non-root user for testing
+RUN useradd -m -s /bin/bash tester && \
+    chown -R tester:tester /workspace
+
+USER tester
+WORKDIR /workspace
+
+# Set environment to show we're in a vulnerable environment
+ENV VULNERABLE_ENV="CVE-2025-3046"
+ENV LLAMA_INDEX_VERSION="0.12.24"
+
+# Default command: bash shell for interactive testing
+CMD ["/bin/bash", "-c", "echo '========================================' && \
+     echo 'CVE-2025-3046 Vulnerable Environment' && \
+     echo 'llama-index version: $LLAMA_INDEX_VERSION' && \
+     echo '========================================' && \
+     echo '' && \
+     echo 'To run the PoC:' && \
+     echo '  python3 poc_CVE-2025-3046.py --target-file /sensitive/secrets.txt' && \
+     echo '' && \
+     echo 'Sensitive files for testing:' && \
+     echo '  /sensitive/config.txt' && \
+     echo '  /sensitive/secrets.txt' && \
+     echo '  /etc/passwd' && \
+     echo '' && \
+     /bin/bash"]
